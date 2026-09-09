@@ -91,6 +91,11 @@ output "sql_admin_login" {
   value       = var.sql_managed_instance.administrator_login
 }
 
+output "sql_databases" {
+  description = "Databases created on the SQL Managed Instance (name => resource ID)."
+  value       = module.sql.database_ids
+}
+
 output "sql_admin_password" {
   description = "SQL Managed Instance administrator password (generated if not supplied)."
   value       = local.sql_admin_password

@@ -11,7 +11,7 @@ Terraform for the **Playterry** production environment on Azure.
 | Backoffice cluster | Private AKS, system + workload node pools, autoscaling, zones 1‑3 | `modules/aks` |
 | Web cluster | Private AKS (user‑facing apps), same shape | `modules/aks` |
 | Cluster ingress | 1 Standard Azure Load Balancer per cluster (internal by default) | `modules/loadbalancer` |
-| Database | Azure SQL Managed Instance, General Purpose, private only | `modules/sql-managed-instance` |
+| Database | Azure SQL Managed Instance, General Purpose, private only + per-database provisioning | `modules/sql-managed-instance` |
 | Web tier | 2 Windows Server 2022 VMs, IIS role auto‑installed, availability set | `modules/iis` |
 | Web ingress | Application Gateway v2 (WAF by default), public frontend → IIS pool | `modules/application-gateway` |
 | Observability | Log Analytics workspace wired to both clusters | root `main.tf` |
@@ -134,6 +134,34 @@ spec:
 
 Set `load_balancer.type = "public"` if a given cluster should be reachable
 directly from the internet instead of only over the VPN.
+
+## SQL Managed Instance databases
+
+Databases are declared in the `sql_databases` map (variable) and created with
+`azurerm_mssql_managed_database`. It is empty by default — add entries once the
+application databases are decided:
+
+```hcl
+sql_databases = {
+  DailyActionsDB        = {}
+  DBA                   = {}
+  ProgressPlayDBArchive = { short_term_retention_days = 14 }
+  SystemParametersDB    = {}
+  WiseSpinDB = {
+    long_term_retention_policy = {
+      weekly_retention  = "P4W"
+      monthly_retention = "P12M"
+      yearly_retention  = "P5Y"
+      week_of_year      = 1
+    }
+  }
+}
+```
+
+Per database you can set `collation` (ForceNew), `short_term_retention_days`
+(1–35, point-in-time-restore window) and a `long_term_retention_policy`.
+`terraform output sql_databases` lists what was created. Removing a key from the
+map **deletes** that database on the next apply.
 
 ## Secrets
 

@@ -30,6 +30,16 @@ sql_managed_instance = {
   # storage_size_in_gb           = 256
 }
 
+# Databases to create on the managed instance. Empty until the app databases
+# are decided. Example (names taken from another environment):
+sql_databases = {
+  # DailyActionsDB        = {}
+  # DBA                   = {}
+  # ProgressPlayDBArchive = { short_term_retention_days = 14 }
+  # SystemParametersDB    = {}
+  # WiseSpinDB            = {}
+}
+
 # --- IIS pool -----------------------------------------------------------
 iis = {
   # instance_count = 2

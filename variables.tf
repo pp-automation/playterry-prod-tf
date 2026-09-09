@@ -186,6 +186,32 @@ variable "sql_managed_instance" {
   default     = {}
 }
 
+variable "sql_databases" {
+  type = map(object({
+    collation                 = optional(string, "SQL_Latin1_General_CP1_CI_AS")
+    short_term_retention_days = optional(number, 7)
+    long_term_retention_policy = optional(object({
+      weekly_retention  = optional(string)
+      monthly_retention = optional(string)
+      yearly_retention  = optional(string)
+      week_of_year      = optional(number)
+    }))
+  }))
+  description = <<-EOT
+    Databases to create on the SQL Managed Instance, keyed by database name.
+    Empty by default - add entries as the application databases are decided, e.g.
+
+      sql_databases = {
+        DailyActionsDB       = {}
+        DBA                  = {}
+        ProgressPlayDBArchive = { short_term_retention_days = 14 }
+        SystemParametersDB   = {}
+        WiseSpinDB           = {}
+      }
+  EOT
+  default     = {}
+}
+
 ###############################################################################
 # IIS web servers behind the Application Gateway
 ###############################################################################

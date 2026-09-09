@@ -212,6 +212,8 @@ module "sql" {
   license_type                 = var.sql_managed_instance.license_type
   minimum_tls_version          = var.sql_managed_instance.minimum_tls_version
 
+  databases = var.sql_databases
+
   tags = local.base_tags
 
   # The subnet delegation, route table and NSG must exist first.
