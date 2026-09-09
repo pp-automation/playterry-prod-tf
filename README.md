@@ -213,6 +213,52 @@ Redis access keys are managed by Azure, not generated here; read them with
 For production, move these to Azure Key Vault and reference them instead of
 storing generated values in state.
 
+## Cost estimate
+
+Order-of-magnitude only — **USD list prices, not a live quote**. Assumes West
+Europe, pay-as-you-go (no reservations, no Azure Hybrid Benefit), 730 h/month,
+autoscalers at their **minimum** node counts, bandwidth/egress excluded.
+
+| Component | Config (repo defaults) | ~USD/mo |
+|---|---|---:|
+| AKS control plane | 2 clusters x Standard tier | 145 |
+| AKS nodes - backoffice | 2x D4s_v5 (system) + 2x D8s_v5 (workload) | 840 |
+| AKS nodes - web | 2x D4s_v5 + 2x D8s_v5 | 840 |
+| AKS node OS disks | ~8x managed disks | 150 |
+| AKS egress LBs + public IPs | 1 Standard LB + IP per cluster | 50 |
+| Internal load balancers | `lb_backoffice` + `lb_web` (Standard) | 40 |
+| P2S VPN gateway | VpnGw1 / Generation1 + public IP | 145 |
+| **SQL Managed Instance** | GP_Gen5, 4 vCore, `LicenseIncluded` | **1,470** |
+| SQL MI storage + backups | 256 GB + PITR | 40 |
+| Redis | Standard C3 (6 GB) + private endpoint + DNS zone | 250 |
+| IIS | 2x D2s_v5 Windows + StandardSSD disks | 300 |
+| Application Gateway | WAF_v2, min 2 capacity units + public IP | 350 |
+| Log Analytics | Container Insights ingest (2 clusters) - **highly variable** | 150-600 |
+| Misc public IPs / private DNS | | 15 |
+| **Baseline total** | | **~$5,000/mo** (+/- $500, mostly Log Analytics) |
+
+**Ceiling (max autoscale):** workload pools 2->6 D8s_v5 per cluster, system
+pools 2->4, App Gateway to 10 CU, heavier log ingest -> **~$8,000-9,500/mo**.
+
+**Biggest levers:**
+
+| Change | Saving |
+|---|---:|
+| `sql_managed_instance.license_type = "BasePrice"` + Azure Hybrid Benefit | ~$700/mo |
+| 1-yr reserved capacity / savings plan on SQL MI + AKS D-series nodes | ~30-40% of compute |
+| Spot or `aks_defaults.workload_node_min_count = 1` on the web pool | ~$280-560/mo |
+| Log Analytics daily cap / Basic Logs / trim Container Insights | up to ~$300/mo |
+| Burstable B-series for IIS if the web tier is light | ~$180/mo |
+| Redis Basic C3 (no replica, no SLA) | ~$120/mo |
+
+**Not included:** outbound/cross-zone bandwidth, Microsoft Defender for Cloud
+(~$50-100/mo here if enabled), TF remote-state storage, Azure Monitor alerts,
+extra snapshots/backups, any DDoS Protection plan.
+
+For an authoritative figure run [`infracost breakdown --path .`](https://www.infracost.io/)
+(it reads `terraform.tfvars`), or price the table above in the Azure Pricing
+Calculator for your region and discount agreement.
+
 ## Notable choices / assumptions
 
 * **Private AKS** by default — access is over the P2S VPN, matching the brief.
