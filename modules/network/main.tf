@@ -58,6 +58,16 @@ resource "azurerm_subnet" "sql_mi" {
   }
 }
 
+resource "azurerm_subnet" "redis" {
+  name                 = "snet-redis"
+  resource_group_name  = var.resource_group_name
+  virtual_network_name = azurerm_virtual_network.this.name
+  address_prefixes     = var.subnet_prefixes.redis
+
+  # Apply the NSG below to the Redis private endpoint.
+  private_endpoint_network_policies = "Enabled"
+}
+
 resource "azurerm_subnet" "gateway" {
   name                 = "GatewaySubnet"
   resource_group_name  = var.resource_group_name
@@ -238,6 +248,46 @@ resource "azurerm_network_security_group" "iis" {
 resource "azurerm_subnet_network_security_group_association" "iis" {
   subnet_id                 = azurerm_subnet.iis.id
   network_security_group_id = azurerm_network_security_group.iis.id
+}
+
+###############################################################################
+# NSG - Redis private endpoint subnet
+###############################################################################
+
+resource "azurerm_network_security_group" "redis" {
+  name                = "${var.name_prefix}-nsg-redis"
+  location            = var.location
+  resource_group_name = var.resource_group_name
+  tags                = var.tags
+
+  security_rule {
+    name                       = "Allow-Redis-From-VNet-Inbound"
+    priority                   = 100
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_ranges    = ["6379", "6380"]
+    source_address_prefix      = "VirtualNetwork"
+    destination_address_prefix = "*"
+  }
+
+  security_rule {
+    name                       = "Deny-All-Inbound"
+    priority                   = 4096
+    direction                  = "Inbound"
+    access                     = "Deny"
+    protocol                   = "*"
+    source_port_range          = "*"
+    destination_port_range     = "*"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  }
+}
+
+resource "azurerm_subnet_network_security_group_association" "redis" {
+  subnet_id                 = azurerm_subnet.redis.id
+  network_security_group_id = azurerm_network_security_group.redis.id
 }
 
 ###############################################################################

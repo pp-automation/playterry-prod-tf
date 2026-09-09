@@ -103,6 +103,37 @@ output "sql_admin_password" {
 }
 
 ###############################################################################
+# Redis
+###############################################################################
+
+output "redis_hostname" {
+  description = "Redis hostname (resolves to the private endpoint over the VNet / VPN)."
+  value       = module.redis.hostname
+}
+
+output "redis_ssl_port" {
+  description = "TLS port for Redis connections (non-TLS port is disabled)."
+  value       = module.redis.ssl_port
+}
+
+output "redis_private_endpoint_ip" {
+  description = "Private IP of the Redis private endpoint in snet-redis."
+  value       = module.redis.private_endpoint_ip
+}
+
+output "redis_primary_access_key" {
+  description = "Redis primary access key."
+  value       = module.redis.primary_access_key
+  sensitive   = true
+}
+
+output "redis_primary_connection_string" {
+  description = "Redis primary connection string (StackExchange.Redis format)."
+  value       = module.redis.primary_connection_string
+  sensitive   = true
+}
+
+###############################################################################
 # IIS + Application Gateway
 ###############################################################################
 

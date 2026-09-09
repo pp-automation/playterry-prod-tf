@@ -26,6 +26,10 @@ output "sql_mi_subnet_id" {
   value = azurerm_subnet.sql_mi.id
 }
 
+output "redis_subnet_id" {
+  value = azurerm_subnet.redis.id
+}
+
 output "gateway_subnet_id" {
   value = azurerm_subnet.gateway.id
 }

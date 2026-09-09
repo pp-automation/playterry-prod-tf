@@ -48,6 +48,7 @@ variable "subnet_prefixes" {
     app_gateway    = list(string)
     iis            = list(string)
     sql_mi         = list(string)
+    redis          = list(string)
     gateway        = list(string)
   })
   description = "CIDR prefixes for each purpose-built subnet."
@@ -57,6 +58,7 @@ variable "subnet_prefixes" {
     app_gateway    = ["10.10.32.0/24"]
     iis            = ["10.10.33.0/24"]
     sql_mi         = ["10.10.34.0/24"]
+    redis          = ["10.10.36.0/24"]
     gateway        = ["10.10.35.0/27"]
   }
 }
@@ -208,6 +210,33 @@ variable "sql_databases" {
         SystemParametersDB   = {}
         WiseSpinDB           = {}
       }
+  EOT
+  default     = {}
+}
+
+###############################################################################
+# Azure Cache for Redis (managed)
+###############################################################################
+
+variable "redis" {
+  type = object({
+    sku_name            = optional(string, "Standard")
+    family              = optional(string, "C")
+    capacity            = optional(number, 3)
+    redis_version       = optional(string, "6")
+    minimum_tls_version = optional(string, "1.2")
+    zones               = optional(list(string), [])
+    maxmemory_policy    = optional(string, "allkeys-lru")
+  })
+  description = <<-EOT
+    Managed Redis (Azure Cache for Redis). Defaults to Standard C3 (6 GB) -
+    covers the ~4 GB working-set estimate. Public network access is disabled;
+    the cache is only reachable through the private endpoint in snet-redis.
+
+      family "C" (Basic/Standard): capacity 1=1GB 2=2.5GB 3=6GB 4=13GB 5=26GB
+      family "P" (Premium):        capacity 1=6GB 2=13GB 3=26GB 4=53GB
+                                   (Premium adds zones + persistence - then
+                                    also set zones = ["1","2","3"])
   EOT
   default     = {}
 }

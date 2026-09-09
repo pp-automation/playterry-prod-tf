@@ -40,6 +40,16 @@ sql_databases = {
   # WiseSpinDB            = {}
 }
 
+# --- Managed Redis (Azure Cache for Redis) ---------------------------
+# Defaults to Standard C3 = 6 GB (covers the ~4 GB estimate). Private
+# endpoint only. Move up to Premium (zones + persistence) with:
+#   redis = { sku_name = "Premium", family = "P", capacity = 1, zones = ["1","2","3"] }
+redis = {
+  # sku_name = "Standard"
+  # family   = "C"
+  # capacity = 3
+}
+
 # --- IIS pool -----------------------------------------------------------
 iis = {
   # instance_count = 2

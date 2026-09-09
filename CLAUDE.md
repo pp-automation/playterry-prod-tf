@@ -30,11 +30,12 @@ providers.tf     azurerm provider + features{}
 versions.tf      required_version / required_providers
 backend.tf       commented azurerm backend
 modules/
-  network/               VNet, 6 subnets, NSGs, SQL-MI route table + associations
+  network/               VNet, 7 subnets, NSGs, SQL-MI route table + associations
   vpn-p2s/               Virtual Network Gateway, P2S OpenVPN + Entra ID auth
   aks/                   reusable private AKS cluster (instantiated twice)
   loadbalancer/          Standard Azure LB (instantiated per cluster)
   sql-managed-instance/  SQL MI + azurerm_mssql_managed_database (for_each)
+  redis/                 Azure Cache for Redis + private endpoint + private DNS zone
   iis/                   2x Windows/IIS VMs + availability set + CustomScriptExtension
   application-gateway/   App Gateway v2 (WAF) in front of the IIS pool
 ```
@@ -58,7 +59,8 @@ modules/
   outputs. Never echo these in plan output or logs.
 - **azurerm 4.x attribute names** — this codebase uses the v4 spellings:
   `auto_scaling_enabled` (not `enable_auto_scaling`), `bgp_route_propagation_enabled`
-  (not `disable_bgp_route_propagation`), `role_based_access_control_enabled`, etc.
+  (not `disable_bgp_route_propagation`), `role_based_access_control_enabled`,
+  `non_ssl_port_enabled` on `azurerm_redis_cache` (not `enable_non_ssl_port`), etc.
   When adding resources, verify against the v4 provider docs, not v3.
 
 ## Things that will bite you
@@ -67,6 +69,11 @@ modules/
   needs the subnet delegation + route-table association + NSG rules in place;
   `module.sql` has an explicit `depends_on = [module.network]`. Keep it.
 - **`GatewaySubnet`** is a literal Azure-reserved name — don't rename it.
+- **`modules/redis` also has `depends_on = [module.network]`** — it needs
+  `snet-redis` + its NSG for the private endpoint. The module owns the
+  `privatelink.redis.cache.windows.net` private DNS zone and the VNet link;
+  don't add a second copy of that zone elsewhere. Redis is private-endpoint
+  only (`public_network_access_enabled = false`).
 - **First apply takes hours** (SQL MI + VPN gateway). Don't assume a hang.
 - **AKS clusters are private** (`private_cluster_enabled = true` default). Plans/tests
   that talk to the K8s API only work from inside the VNet / over the VPN.

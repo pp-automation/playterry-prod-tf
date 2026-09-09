@@ -221,6 +221,34 @@ module "sql" {
 }
 
 ###############################################################################
+# Managed Redis (Azure Cache for Redis)
+###############################################################################
+
+module "redis" {
+  source = "./modules/redis"
+
+  name_prefix         = local.name_prefix
+  location            = azurerm_resource_group.main.location
+  resource_group_name = azurerm_resource_group.main.name
+
+  private_endpoint_subnet_id = module.network.redis_subnet_id
+  virtual_network_id         = module.network.vnet_id
+
+  sku_name            = var.redis.sku_name
+  family              = var.redis.family
+  capacity            = var.redis.capacity
+  redis_version       = var.redis.redis_version
+  minimum_tls_version = var.redis.minimum_tls_version
+  zones               = var.redis.zones
+  maxmemory_policy    = var.redis.maxmemory_policy
+
+  tags = local.base_tags
+
+  # The private-endpoint subnet + NSG must exist first.
+  depends_on = [module.network]
+}
+
+###############################################################################
 # IIS web servers + Application Gateway
 ###############################################################################
 

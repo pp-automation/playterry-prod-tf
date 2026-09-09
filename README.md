@@ -12,6 +12,7 @@ Terraform for the **Playterry** production environment on Azure.
 | Web cluster | Private AKS (user‑facing apps), same shape | `modules/aks` |
 | Cluster ingress | 1 Standard Azure Load Balancer per cluster (internal by default) | `modules/loadbalancer` |
 | Database | Azure SQL Managed Instance, General Purpose, private only + per-database provisioning | `modules/sql-managed-instance` |
+| Cache | Azure Cache for Redis, Standard C3 (6 GB), private endpoint only | `modules/redis` |
 | Web tier | 2 Windows Server 2022 VMs, IIS role auto‑installed, availability set | `modules/iis` |
 | Web ingress | Application Gateway v2 (WAF by default), public frontend → IIS pool | `modules/application-gateway` |
 | Observability | Log Analytics workspace wired to both clusters | root `main.tf` |
@@ -33,11 +34,12 @@ Terraform for the **Playterry** production environment on Azure.
 
   Operators ── P2S VPN (Entra ID) ──► VpnGw ──► VNet 10.10.0.0/16
                                                  │
-   ┌───────────────┬─────────────────┬───────────┴────────────┐
-   │ snet-aks-      │ snet-aks-web    │ snet-sqlmi             │
-   │ backoffice     │                 │ (delegated,           │
-   │  AKS + LB      │  AKS + LB       │  SQL Managed Instance) │
-   └───────────────┴─────────────────┴────────────────────────┘
+   ┌───────────────┬─────────────────┬───────────┴───┬────────────────┐
+   │ snet-aks-      │ snet-aks-web    │ snet-sqlmi    │ snet-redis     │
+   │ backoffice     │                 │ (delegated,   │ (private       │
+   │  AKS + LB      │  AKS + LB       │  SQL MI)      │  endpoint →    │
+   │               │                 │               │  Redis)        │
+   └───────────────┴─────────────────┴───────────────┴────────────────┘
 ```
 
 ### Default address plan (`10.10.0.0/16`)
@@ -50,6 +52,7 @@ Terraform for the **Playterry** production environment on Azure.
 | `snet-iis`            | `10.10.33.0/24` | IIS VMs |
 | `snet-sqlmi`          | `10.10.34.0/24` | SQL Managed Instance (delegated) |
 | `GatewaySubnet`       | `10.10.35.0/27` | VPN gateway |
+| `snet-redis`          | `10.10.36.0/24` | Redis private endpoint |
 | VPN client pool       | `172.16.0.0/24` | Handed to connected clients (no overlap) |
 | K8s service CIDR      | `10.0.0.0/16`   | Cluster-internal, not routed |
 | K8s pod CIDR (overlay)| `10.244.0.0/16` | Cluster-internal, not routed |
@@ -67,6 +70,7 @@ Terraform for the **Playterry** production environment on Azure.
     ├── aks/
     ├── loadbalancer/
     ├── sql-managed-instance/
+    ├── redis/
     ├── iis/
     └── application-gateway/
 ```
@@ -75,7 +79,7 @@ Terraform for the **Playterry** production environment on Azure.
 
 1. **Terraform >= 1.6** and the **azurerm ~> 4.0** provider.
 2. Azure CLI authenticated (`az login`) with **Owner** / **Contributor + User Access Administrator** on the target subscription.
-3. Providers registered: `Microsoft.ContainerService`, `Microsoft.Sql`, `Microsoft.Network`, `Microsoft.OperationalInsights`.
+3. Providers registered: `Microsoft.ContainerService`, `Microsoft.Sql`, `Microsoft.Network`, `Microsoft.OperationalInsights`, `Microsoft.Cache`.
 4. For the VPN: the **Azure VPN** enterprise application must be consented in your tenant
    (`https://learn.microsoft.com/azure/vpn-gateway/openvpn-azure-ad-tenant` — grant admin consent once).
 5. A remote state backend (see `backend.tf`) — an Azure Storage account + container.
@@ -108,6 +112,10 @@ VPN gateway are the long poles. Everything else finishes in ~15–25 min.
   or browse the app through `terraform output application_gateway_public_ip`.
 * **SQL MI** – reachable on port 1433 at `terraform output sql_managed_instance_fqdn`
   from inside the VNet / over the VPN only.
+* **Redis** – TLS only (`terraform output redis_hostname` : `terraform output redis_ssl_port`,
+  6380). Resolves to the private endpoint via the `privatelink.redis.cache.windows.net`
+  private DNS zone, so it works from AKS pods and from P2S clients that use Azure DNS.
+  `terraform output -raw redis_primary_connection_string` for the app config value.
 
 ### Wiring app traffic to the per‑cluster load balancer
 
@@ -163,6 +171,30 @@ Per database you can set `collation` (ForceNew), `short_term_retention_days`
 `terraform output sql_databases` lists what was created. Removing a key from the
 map **deletes** that database on the next apply.
 
+## Managed Redis
+
+`modules/redis` provisions **Azure Cache for Redis** and exposes it through a
+**private endpoint** in `snet-redis` — `public_network_access_enabled = false`,
+non-TLS port disabled, TLS floor 1.2. The module also creates the
+`privatelink.redis.cache.windows.net` private DNS zone and links it to the hub
+VNet, so `redis_hostname` resolves to the private IP everywhere in the VNet.
+
+Sizing is the `redis` object variable. It defaults to **Standard C3 (6 GB)**,
+covering the ~4 GB working-set estimate:
+
+```hcl
+redis = {
+  sku_name = "Standard"  # "Standard" | "Basic" | "Premium"
+  family   = "C"         # "C" for Basic/Standard, "P" for Premium
+  capacity = 3           # C1=1GB C2=2.5GB C3=6GB C4=13GB
+  # maxmemory_policy = "allkeys-lru"
+}
+```
+
+Premium adds zone redundancy, data persistence and VNet injection. To move up:
+`redis = { sku_name = "Premium", family = "P", capacity = 1, zones = ["1","2","3"] }`
+(P1 is also 6 GB).
+
 ## Secrets
 
 `sql_managed_instance.administrator_login_password` and `iis.admin_password` are
@@ -173,6 +205,10 @@ outputs:
 terraform output -raw sql_admin_password
 terraform output -raw iis_admin_password
 ```
+
+Redis access keys are managed by Azure, not generated here; read them with
+`terraform output -raw redis_primary_access_key` /
+`terraform output -raw redis_primary_connection_string`.
 
 For production, move these to Azure Key Vault and reference them instead of
 storing generated values in state.

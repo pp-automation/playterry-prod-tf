@@ -22,6 +22,7 @@ variable "subnet_prefixes" {
     app_gateway    = list(string)
     iis            = list(string)
     sql_mi         = list(string)
+    redis          = list(string)
     gateway        = list(string)
   })
 }
